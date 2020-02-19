@@ -2,9 +2,9 @@ import api_service
 
 RATE_LIMIT_CONFIG = {
     "serviceLimits": [{"service": "OrderService", "globalLimits": {"GET": {"limit": 10, "granularity": "second"},
-                                                                   "POST": {"limit": 50, "granularity": "minute"}},
+                                                                   "POST": {"limit": 6, "granularity": "minute"}},
                        "apiLimits": [{"methods": {"GET": {"limit": 15, "granularity": "second"},
-                                                  "POST": {"limit": 5, "granularity": "minute"}},
+                                                  "POST": {"limit": 10, "granularity": "minute"}},
                                       "api": "CreateOrder"}, {"methods": {"GET": {"limit": 10, "granularity": "second"},
                                                                           "POST": {"limit": 10,
                                                                                    "granularity": "second"}},
@@ -12,7 +12,7 @@ RATE_LIMIT_CONFIG = {
                                                                                          "globalLimits": {
                                                                                              "GET": {"limit": 3,
                                                                                                      "granularity": "second"},
-                                                                                             "POST": {"limit": 20,
+                                                                                             "POST": {"limit": 3,
                                                                                                       "granularity": "minute"}},
                                                                                          "apiLimits": []}]
 }
@@ -65,51 +65,36 @@ class RateLimiter(api_service.ApiService):
 
         global_hits = global_hits[idx:]
 
-        if len(global_hits) > limit:
+        if len(global_hits) >= limit:
             return False
 
         return True
 
     def __satisfyApiLimits(self, service_endpoint, api_endpoint, method, call_time):
 
-        api_hits = self.__getApiHits(service_endpoint, api_endpoint, method)
-        limit = self.rate_limit_config[service_endpoint]['api_limits'][api_endpoint][method]['limit']
-        granularity = self.__getGranularity(self.rate_limit_config[service_endpoint]['api_limits'][api_endpoint][method]['granularity'])
+        try:
+            api_hits = self.__getApiHits(service_endpoint, api_endpoint, method)
+            limit = self.rate_limit_config[service_endpoint]['api_limits'][api_endpoint][method]['limit']
+            granularity = self.__getGranularity(
+                self.rate_limit_config[service_endpoint]['api_limits'][api_endpoint][method]['granularity'])
 
-        idx = 0
-        for hit in api_hits:
-            if hit <= (call_time - granularity):
-                idx = idx + 1
-            else:
-                break
+            idx = 0
+            for hit in api_hits:
+                if hit <= (call_time - granularity):
+                    idx = idx + 1
+                else:
+                    break
 
-        api_hits = api_hits[idx:]
+            api_hits = api_hits[idx:]
 
-        if len(api_hits) > limit:
-            return False
+            if len(api_hits) >= limit:
+                return False
 
-        return True
-
-    def __configParser(self):
-        service_limits = {}
-
-        for obj in RATE_LIMIT_CONFIG["serviceLimits"]:
-            service_limits[obj['service']] = {'global_limit': self.__globalLimitParser(obj['globalLimits']), 'api_limits': self.__apiLimitParser(obj['apiLimits'])}
-
-        return service_limits
-
-    def __globalLimitParser(self, globalLimits):
-        return globalLimits
-
-    def __apiLimitParser(self, apiLimits):
-        api_limits = {}
-        for obj in apiLimits:
-            api_limits[obj['api']] = obj['methods']
-
-        return api_limits
+            return True
+        except:
+            return True
 
     def __getGlobalHits(self, service_endpoint, method):
-
         try:
             return self.GLOBAL_RATE_LIMITS[service_endpoint][method]
         except:
@@ -146,3 +131,21 @@ class RateLimiter(api_service.ApiService):
             return 1000
         elif granularity == 'minute':
             return 60*1000
+
+    def __configParser(self):
+        service_limits = {}
+
+        for obj in RATE_LIMIT_CONFIG["serviceLimits"]:
+            service_limits[obj['service']] = {'global_limit': self.__globalLimitParser(obj['globalLimits']), 'api_limits': self.__apiLimitParser(obj['apiLimits'])}
+
+        return service_limits
+
+    def __globalLimitParser(self, globalLimits):
+        return globalLimits
+
+    def __apiLimitParser(self, apiLimits):
+        api_limits = {}
+        for obj in apiLimits:
+            api_limits[obj['api']] = obj['methods']
+
+        return api_limits
